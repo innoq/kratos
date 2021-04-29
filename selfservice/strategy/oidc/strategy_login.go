@@ -78,7 +78,7 @@ func (s *Strategy) processLogin(w http.ResponseWriter, r *http.Request, a *login
 
 	for _, c := range o.Providers {
 		if c.Subject == claims.Subject && c.Provider == provider.Config().ID {
-			if err = s.d.LoginHookExecutor().PostLoginHook(w, r, identity.CredentialsTypeOIDC, a, i); err != nil {
+			if err = s.d.LoginHookExecutor().PostFlowPostPersistHook(w, r, identity.CredentialsTypeOIDC, a, i); err != nil {
 				return nil, s.handleError(w, r, a, provider.Config().ID, nil, err)
 			}
 			return nil, nil

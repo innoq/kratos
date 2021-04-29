@@ -3,11 +3,10 @@ package hook
 import (
 	"net/http"
 
-	"github.com/ory/kratos/selfservice/flow/login"
+	"github.com/ory/kratos/selfservice/flow"
+
 	"github.com/ory/kratos/session"
 )
-
-var _ login.PostHookExecutor = new(SessionDestroyer)
 
 type (
 	sessionDestroyerDependencies interface {
@@ -23,7 +22,7 @@ func NewSessionDestroyer(r sessionDestroyerDependencies) *SessionDestroyer {
 	return &SessionDestroyer{r: r}
 }
 
-func (e *SessionDestroyer) ExecuteLoginPostHook(_ http.ResponseWriter, r *http.Request, _ *login.Flow, s *session.Session) error {
+func (e *SessionDestroyer) ExecutePostFlowPostPersistHook(_ http.ResponseWriter, r *http.Request, _ flow.Flow, s *session.Session) error {
 	if err := e.r.SessionPersister().DeleteSessionsByIdentity(r.Context(), s.Identity.ID); err != nil {
 		return err
 	}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/ory/kratos/selfservice/flow"
+
 	"github.com/tidwall/gjson"
 
 	"github.com/ory/kratos/identity"
@@ -18,9 +20,6 @@ var (
 	_ registration.PostHookPrePersistExecutor  = new(Error)
 	_ registration.PostHookPostPersistExecutor = new(Error)
 	_ registration.PreHookExecutor             = new(Error)
-
-	_ login.PreHookExecutor  = new(Error)
-	_ login.PostHookExecutor = new(Error)
 
 	_ settings.PostHookPostPersistExecutor = new(Error)
 	_ settings.PostHookPrePersistExecutor  = new(Error)
@@ -48,11 +47,11 @@ func (e Error) ExecuteSettingsPostPersistHook(w http.ResponseWriter, r *http.Req
 	return e.err("ExecuteSettingsPostPersistHook", settings.ErrHookAbortRequest)
 }
 
-func (e Error) ExecuteLoginPostHook(w http.ResponseWriter, r *http.Request, a *login.Flow, s *session.Session) error {
+func (e Error) ExecutePostFlowPostPersistHook(w http.ResponseWriter, r *http.Request, a flow.Flow, s *session.Session) error {
 	return e.err("ExecuteLoginPostHook", login.ErrHookAbortFlow)
 }
 
-func (e Error) ExecuteLoginPreHook(w http.ResponseWriter, r *http.Request, a *login.Flow) error {
+func (e Error) ExecutePreFlowHook(w http.ResponseWriter, r *http.Request, a flow.Flow) error {
 	return e.err("ExecuteLoginPreHook", login.ErrHookAbortFlow)
 }
 

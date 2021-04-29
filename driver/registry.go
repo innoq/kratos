@@ -101,8 +101,6 @@ type Registry interface {
 
 	login.FlowPersistenceProvider
 	login.ErrorHandlerProvider
-	login.HooksProvider
-	login.HookExecutorProvider
 	login.HandlerProvider
 	login.StrategyProvider
 

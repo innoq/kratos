@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ory/kratos/selfservice/flow"
+
 	"github.com/luna-duclos/instrumentedsql"
 	"github.com/luna-duclos/instrumentedsql/opentracing"
 
@@ -98,7 +100,7 @@ type RegistryDefault struct {
 	seflserviceRegistrationErrorHandler        *registration.ErrorHandler
 	selfserviceRegistrationRequestErrorHandler *registration.ErrorHandler
 
-	selfserviceLoginExecutor            *login.HookExecutor
+	selfserviceLoginExecutor            *flow.HookExecutor
 	selfserviceLoginHandler             *login.Handler
 	selfserviceLoginRequestErrorHandler *login.ErrorHandler
 

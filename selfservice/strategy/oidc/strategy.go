@@ -67,12 +67,11 @@ type dependencies interface {
 	session.ManagementProvider
 	session.HandlerProvider
 
-	login.HookExecutorProvider
 	login.FlowPersistenceProvider
-	login.HooksProvider
 	login.StrategyProvider
 	login.HandlerProvider
 	login.ErrorHandlerProvider
+	login.HookExecutorProvider
 
 	registration.HookExecutorProvider
 	registration.FlowPersistenceProvider

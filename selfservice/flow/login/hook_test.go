@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ory/kratos/session"
+
 	"github.com/gobuffalo/httptest"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +36,7 @@ func TestLoginExecutor(t *testing.T) {
 				router := httprouter.New()
 
 				router.GET("/login/pre", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-					if testhelpers.SelfServiceHookLoginErrorHandler(t, w, r, reg.LoginHookExecutor().PreLoginHook(w, r, login.NewFlow(conf, time.Minute, "", r, ft))) {
+					if testhelpers.SelfServiceHookLoginErrorHandler(t, w, r, reg.LoginHookExecutor().PreFlowHook(w, r, login.NewFlow(conf, time.Minute, "", r, ft))) {
 						_, _ = w.Write([]byte("ok"))
 					}
 				})
@@ -42,8 +44,10 @@ func TestLoginExecutor(t *testing.T) {
 				router.GET("/login/post", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 					a := login.NewFlow(conf, time.Minute, "", r, ft)
 					a.RequestURL = x.RequestURL(r).String()
+					i := testhelpers.SelfServiceHookCreateFakeIdentity(t, reg)
+					s := session.NewActiveSession(i, conf, time.Now().UTC())
 					testhelpers.SelfServiceHookLoginErrorHandler(t, w, r,
-						reg.LoginHookExecutor().PostLoginHook(w, r, identity.CredentialsType(strategy), a, testhelpers.SelfServiceHookCreateFakeIdentity(t, reg)))
+						reg.LoginHookExecutor().PostFlowPostPersistHook(w, r, identity.CredentialsType(strategy), a, s))
 				})
 
 				ts := httptest.NewServer(router)

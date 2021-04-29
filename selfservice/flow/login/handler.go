@@ -32,17 +32,19 @@ const (
 
 type (
 	handlerDependencies interface {
+		ErrorHandlerProvider
 		HookExecutorProvider
 		FlowPersistenceProvider
-		errorx.ManagementProvider
 		StrategyProvider
+		errorx.ManagementProvider
 		session.HandlerProvider
 		session.ManagementProvider
+		session.PersistenceProvider
 		x.WriterProvider
 		x.CSRFTokenGeneratorProvider
 		x.CSRFProvider
+		x.LoggingProvider
 		config.Provider
-		ErrorHandlerProvider
 	}
 	HandlerProvider interface {
 		LoginHandler() *Handler
@@ -86,7 +88,7 @@ func (h *Handler) NewLoginFlow(w http.ResponseWriter, r *http.Request, flow flow
 		return nil, err
 	}
 
-	if err := h.d.LoginHookExecutor().PreLoginHook(w, r, f); err != nil {
+	if err := h.d.LoginHookExecutor().PreFlowHook(w, r, f); err != nil {
 		return nil, err
 	}
 
@@ -338,7 +340,7 @@ func (h *Handler) submitFlow(w http.ResponseWriter, r *http.Request, _ httproute
 		return
 	}
 
-	if _, err := h.d.SessionManager().FetchFromRequest(r.Context(), r); err == nil && !f.Forced {
+	if _, err = h.d.SessionManager().FetchFromRequest(r.Context(), r); err == nil && !f.Forced {
 		if f.Type == flow.TypeBrowser {
 			http.Redirect(w, r, h.d.Config(r.Context()).SelfServiceBrowserDefaultReturnTo().String(), http.StatusFound)
 			return
@@ -354,7 +356,7 @@ func (h *Handler) submitFlow(w http.ResponseWriter, r *http.Request, _ httproute
 	}
 
 	var i *identity.Identity
-	var s identity.CredentialsType
+	var ct identity.CredentialsType
 	for _, ss := range h.d.AllLoginStrategies() {
 		interim, err := ss.Login(w, r, f)
 		if errors.Is(err, flow.ErrStrategyNotResponsible) {
@@ -367,7 +369,7 @@ func (h *Handler) submitFlow(w http.ResponseWriter, r *http.Request, _ httproute
 		}
 
 		i = interim
-		s = ss.ID()
+		ct = ss.ID()
 		break
 	}
 
@@ -378,8 +380,55 @@ func (h *Handler) submitFlow(w http.ResponseWriter, r *http.Request, _ httproute
 
 	// TODO Handle n+1 authentication factor
 
-	if err := h.d.LoginHookExecutor().PostLoginHook(w, r, s, f, i); err != nil {
+	s := session.NewActiveSession(i, h.d.Config(r.Context()), time.Now().UTC()).Declassify()
+	if err := h.d.LoginHookExecutor().PostFlowPostPersistHook(w, r, ct, f, s); err != nil {
+		if errors.Is(err, ErrHookAbortFlow) {
+			h.d.Logger().
+				WithRequest(r).
+				WithField("identity_id", i.ID).
+				WithField("flow_method", ct).
+				Debug("A ExecuteLoginPostHook hook aborted early.")
+			return
+		}
 		h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, err)
 		return
+	}
+
+	h.d.Logger().
+		WithRequest(r).
+		WithField("identity_id", i.ID).
+		WithField("flow_method", ct).
+		Debug("ExecuteLoginPostHooks completed successfully.")
+
+	if f.Type == flow.TypeAPI {
+		if err := h.d.SessionPersister().CreateSession(r.Context(), s); err != nil {
+			h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(err))
+			return
+		}
+
+		h.d.Audit().
+			WithRequest(r).
+			WithField("session_id", s.ID).
+			WithField("identity_id", i.ID).
+			Info("Identity authenticated successfully and was issued an ORY Kratos Session Token.")
+
+		h.d.Writer().Write(w, r, &APIFlowResponse{Session: s, Token: s.Token})
+		return
+	}
+
+	if err := h.d.SessionManager().CreateAndIssueCookie(r.Context(), w, r, s); err != nil {
+		h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(err))
+		return
+	}
+
+	h.d.Audit().
+		WithRequest(r).
+		WithField("identity_id", i.ID).
+		WithField("session_id", s.ID).
+		Info("Identity authenticated successfully and was issued an ORY Kratos Session Cookie.")
+
+	if err := x.SecureContentNegotiationRedirection(w, r, s.Declassify(), f.RequestURL,
+		h.d.Writer(), h.d.Config(r.Context()), x.SecureRedirectOverrideDefaultReturnTo(h.d.Config(r.Context()).SelfServiceFlowLoginReturnTo(ct.String()))); err != nil {
+		h.d.SelfServiceErrorManager().Forward(r.Context(), w, r, errors.WithStack(err))
 	}
 }
